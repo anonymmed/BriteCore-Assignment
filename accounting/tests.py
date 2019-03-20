@@ -45,6 +45,15 @@ class TestBillingSchedules(unittest.TestCase):
             db.session.delete(invoice)
         db.session.commit()
 
+    def test_monthly_billing_schedule(self):
+        self.policy.billing_schedule = "Monthly"
+        #No invoices currently exist
+        self.assertFalse(self.policy.invoices)
+        #Invoices should be made when the class is initiated
+        pa = PolicyAccounting(self.policy.id)
+        self.assertEquals(len(self.policy.invoices), 12)
+        self.assertEquals(self.policy.invoices[0].amount_due, 100)
+
     def test_annual_billing_schedule(self):
         self.policy.billing_schedule = "Annual"
         #No invoices currently exist
