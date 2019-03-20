@@ -20,6 +20,30 @@ class PolicyAccounting(object):
 
         if not self.policy.invoices:
             self.make_invoices()
+    """Updating billing schedule"""
+
+    def update_billing_schedule(self, new_schedule=None):
+
+        billing_schedules = {'Annual': None, 'Semi-Annual': 3, 'Quarterly': 4, 'Monthly': 12, 'Two-Pay': 2}
+        """
+        Check If the selected new schedule doesn't exist in our billing_schedules
+        or if the policy is already updated with the requested schedule
+        """
+        if (self.policy.billing_schedule == new_schedule or not billing_schedules.has_key(new_schedule)):
+            print "Please Choose one of these Valid billing Schedules:"
+            for key, val in billing_schedules.iteritems():
+                print key
+            return
+
+        """Updating old Invoices to Deleted status """
+        for invoice in self.policy.invoices:
+            invoice.deleted = True
+            db.session.commit()
+
+        """Update the new Billing Schedule"""
+        self.policy.billing_schedule = new_schedule
+        self.make_invoices()
+
 
     def return_account_balance(self, date_cursor=None):
         """
@@ -34,6 +58,7 @@ class PolicyAccounting(object):
         """
         invoices = Invoice.query.filter_by(policy_id=self.policy.id)\
                                 .filter(Invoice.bill_date <= date_cursor)\
+                                .filter(Invoice.deleted == False)\
                                 .order_by(Invoice.bill_date)\
                                 .all()
 
@@ -102,6 +127,7 @@ class PolicyAccounting(object):
          made it to the cancel_date yet.
         """
         invoices = Invoice.query.filter_by(policy_id=self.policy.id)\
+                                .filter(Invoice.deleted == False)\
                                 .order_by(Invoice.bill_date)\
                                 .all()
 
@@ -130,6 +156,7 @@ class PolicyAccounting(object):
         """
         invoices = Invoice.query.filter_by(policy_id=self.policy.id)\
                                 .filter(Invoice.cancel_date <= date_cursor)\
+                                .filter(Invoice.deleted == False)\
                                 .order_by(Invoice.bill_date)\
                                 .all()
 
@@ -152,7 +179,8 @@ class PolicyAccounting(object):
         Deleting the policy invoices
         """
         for invoice in self.policy.invoices:
-            invoice.delete()
+            if invoice.deleted == False:
+                invoice.delete()
         #Creating a dictionary for the billing_schedules
         billing_schedules = {'Annual': None, 'Semi-Annual': 3, 'Quarterly': 4, 'Monthly': 12, 'Two-Pay': 2}
         """
@@ -251,6 +279,7 @@ def insert_data():
     policies = []
     p1 = Policy('Policy One', date(2015, 1, 1), 365)
     p1.billing_schedule = 'Annual'
+    p1.named_insured = anna_white.id
     p1.agent = bob_smith.id
     policies.append(p1)
 

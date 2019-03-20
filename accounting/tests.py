@@ -72,6 +72,101 @@ class TestBillingSchedules(unittest.TestCase):
         self.assertEquals(len(self.policy.invoices), 2)
         self.assertEquals(self.policy.invoices[0].amount_due, 600)
 
+class TestUpdateBillingSchedule(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.test_agent = Contact('Test Agent', 'Agent')
+        cls.test_insured = Contact('Test Insured', 'Named Insured')
+        db.session.add(cls.test_agent)
+        db.session.add(cls.test_insured)
+        db.session.commit()
+
+        cls.policy = Policy('Test Policy', date(2015, 1, 1), 1200)
+        db.session.add(cls.policy)
+        cls.policy.named_insured = cls.test_insured.id
+        cls.policy.agent = cls.test_agent.id
+        db.session.commit()
+
+    @classmethod
+    def tearDownClass(cls):
+        db.session.delete(cls.test_insured)
+        db.session.delete(cls.test_agent)
+        db.session.delete(cls.policy)
+        db.session.commit()
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        for invoice in self.policy.invoices:
+            db.session.delete(invoice)
+        db.session.commit()
+
+    def test_update_billing_schedule_quartely_to_annual(self):
+        self.policy.billing_schedule = "Quarterly"
+        self.assertFalse(self.policy.invoices)
+        pa = PolicyAccounting(self.policy.id)
+        self.assertEqual(len(self.policy.invoices), 4)
+        pa.update_billing_schedule("Annual")
+        """Total Of 5 Invoices """
+        self.assertEqual(len(self.policy.invoices), 5)
+        self.assertEqual(self.policy.invoices[0].deleted, True)
+        self.assertEqual(self.policy.invoices[1].deleted, True)
+        self.assertEqual(self.policy.invoices[2].deleted, True)
+        self.assertEqual(self.policy.invoices[3].deleted, True)
+
+        
+    def test_update_billing_schedule_annual_to_monthly(self):
+        self.policy.billing_schedule = "Annual"
+        self.assertFalse(self.policy.invoices)
+        pa = PolicyAccounting(self.policy.id)
+        self.assertEqual(len(self.policy.invoices), 1)
+        pa.update_billing_schedule("Monthly")
+        """Total of 13 Invoices """
+        self.assertEqual(len(self.policy.invoices), 13)
+        self.assertEqual(self.policy.invoices[0].deleted, True)
+        self.assertEqual(self.policy.invoices[1].deleted, False)
+        self.assertEqual(self.policy.invoices[2].deleted, False)
+        self.assertEqual(self.policy.invoices[3].deleted, False)
+        self.assertEqual(self.policy.invoices[4].deleted, False)
+        self.assertEqual(self.policy.invoices[5].deleted, False)
+        self.assertEqual(self.policy.invoices[6].deleted, False)
+        self.assertEqual(self.policy.invoices[7].deleted, False)
+        self.assertEqual(self.policy.invoices[8].deleted, False)
+        self.assertEqual(self.policy.invoices[9].deleted, False)
+        self.assertEqual(self.policy.invoices[10].deleted, False)
+        self.assertEqual(self.policy.invoices[11].deleted, False)
+        self.assertEqual(self.policy.invoices[12].deleted, False)
+
+    def test_update_billing_schedule_to_same_schedule(self):
+        self.policy.billing_schedule = "Annual"
+        self.assertFalse(self.policy.invoices)
+        pa = PolicyAccounting(self.policy.id)
+        self.assertEqual(len(self.policy.invoices), 1)
+        pa.update_billing_schedule("Annual")
+        self.assertEqual(len(self.policy.invoices), 1)
+        self.assertEqual(self.policy.invoices[0].deleted, False)
+
+    def test_update_billing_schedule_annual_to_twopay(self):
+        self.policy.billing_schedule = "Annual"
+        self.assertFalse(self.policy.invoices)
+        pa = PolicyAccounting(self.policy.id)
+        self.assertEqual(len(self.policy.invoices), 1)
+        pa.update_billing_schedule("Two-Pay")
+        self.assertEqual(len(self.policy.invoices), 3)
+        self.assertEqual(self.policy.invoices[0].deleted, True)
+
+    def test_update_billing_schedule_to_incorrect_name(self):
+        self.policy.billing_schedule = "Annual"
+        self.assertFalse(self.policy.invoices)
+        pa = PolicyAccounting(self.policy.id)
+        self.assertEqual(len(self.policy.invoices), 1)
+        pa.update_billing_schedule("Wrong-Schedule")
+        self.assertEqual(len(self.policy.invoices), 1)
+        self.assertEqual(self.policy.invoices[0].deleted, False)
+
+
 class TestReturnAccountBalance(unittest.TestCase):
 
     @classmethod
