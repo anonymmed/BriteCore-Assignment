@@ -1,8 +1,7 @@
 #!/user/bin/env python2.7
-
+import logging
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
-
 from accounting import db
 from models import Contact, Invoice, Payment, Policy
 
@@ -23,35 +22,62 @@ class PolicyAccounting(object):
             self.make_invoices()
 
     def return_account_balance(self, date_cursor=None):
+        """
+        if date_cursor is null
+        then Initialize date_cursor with the current date
+        """
         if not date_cursor:
             date_cursor = datetime.now().date()
-
+        """
+        return the invoices by policy_id where their bill_date less or equal to the date_cursor,
+        ordered by the invoice bill date
+        """
         invoices = Invoice.query.filter_by(policy_id=self.policy.id)\
                                 .filter(Invoice.bill_date <= date_cursor)\
                                 .order_by(Invoice.bill_date)\
                                 .all()
+
+        # get the sum of the due amount
         due_now = 0
         for invoice in invoices:
             due_now += invoice.amount_due
 
+        """
+        Get all the payments by policy_id
+        where it's transaction_date less or equal to the date_cursor
+        """
         payments = Payment.query.filter_by(policy_id=self.policy.id)\
                                 .filter(Payment.transaction_date <= date_cursor)\
                                 .all()
+
+        """
+        substracting the paid payments from the total due amount
+        """
         for payment in payments:
             due_now -= payment.amount_paid
 
         return due_now
 
     def make_payment(self, contact_id=None, date_cursor=None, amount=0):
+        """
+        if date_cursor is null
+        then Initialize date_cursor with the current date
+        """
         if not date_cursor:
             date_cursor = datetime.now().date()
 
+        """
+        If contact_id is NULL then contact_id = named_insured
+        """
         if not contact_id:
             try:
                 contact_id = self.policy.named_insured
             except:
-                pass
+                logging.exception("contact_id cannot be NULL")
 
+        """
+        Creating a new payment with the previous Information and persisting it
+        """
         payment = Payment(self.policy.id,
                           contact_id,
                           amount,
@@ -71,14 +97,26 @@ class PolicyAccounting(object):
         pass
 
     def evaluate_cancel(self, date_cursor=None):
+
+        """
+        If date_cursor is NULL, Initialize it with the current date
+        """
         if not date_cursor:
             date_cursor = datetime.now().date()
 
+        """
+        Get all Invoices by policy_id where the cancel_date less or equal to the date_cursor
+        ordered by the bill_date
+        """
         invoices = Invoice.query.filter_by(policy_id=self.policy.id)\
                                 .filter(Invoice.cancel_date <= date_cursor)\
                                 .order_by(Invoice.bill_date)\
                                 .all()
 
+        """
+        Check if Policy should be cancelled or not and printing the result
+        by checking if there is a remaining unpaid balance or not
+        """
         for invoice in invoices:
             if not self.return_account_balance(invoice.cancel_date):
                 continue
@@ -90,11 +128,16 @@ class PolicyAccounting(object):
 
 
     def make_invoices(self):
+        """
+        Deleting the policy invoices
+        """
         for invoice in self.policy.invoices:
             invoice.delete()
-
+        #Creating a dictionary for the billing_schedules
         billing_schedules = {'Annual': None, 'Semi-Annual': 3, 'Quarterly': 4, 'Monthly': 12}
-
+        """
+        Creating the Policy's Invoice with it's effective dates
+        """
         invoices = []
         first_invoice = Invoice(self.policy.id,
                                 self.policy.effective_date, #bill_date
@@ -103,6 +146,9 @@ class PolicyAccounting(object):
                                 self.policy.annual_premium)
         invoices.append(first_invoice)
 
+        """
+        Creating the remaining invoices for the different types of billing_schedule
+        """
         if self.policy.billing_schedule == "Annual":
             pass
         elif self.policy.billing_schedule == "Two-Pay":
@@ -140,8 +186,14 @@ class PolicyAccounting(object):
                                   self.policy.annual_premium / billing_schedules.get(self.policy.billing_schedule))
                 invoices.append(invoice)
         else:
+            """
+            Wrong schedule, No invoice will be created for it
+            """
             print "You have chosen a bad billing schedule."
 
+        """
+        Looping throught the Invoices and persisting each one
+        """
         for invoice in invoices:
             db.session.add(invoice)
         db.session.commit()
