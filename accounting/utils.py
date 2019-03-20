@@ -38,7 +38,7 @@ class PolicyAccounting(object):
         """Updating old Invoices to Deleted status """
         for invoice in self.policy.invoices:
             invoice.deleted = True
-            db.session.commit()
+        db.session.commit()
 
         """Update the new Billing Schedule"""
         self.policy.billing_schedule = new_schedule
@@ -169,9 +169,53 @@ class PolicyAccounting(object):
                 continue
             else:
                 print "THIS POLICY SHOULD HAVE CANCELED"
-                break
+                self.cancel_policy("unpaid", "This has an Unpaid Invoice", datetime.now().date())
+                return True
         else:
             print "THIS POLICY SHOULD NOT CANCEL"
+            return False
+
+    """
+    This Method cancel a policy with it's full descriptions.
+    ps: all cancel info are required (By choice), to chane it edit the conditional statements
+    """
+    def cancel_policy(self, cancel_reason=None, cancel_desc=None, cancel_date=None):
+        """
+        All available cancalation reasons
+        """
+        cancelation_reason = ["underwriting", "unpaid", 'unauthorized']
+
+        """
+        Check whether a cancel status or the cancel description, it's status is not null
+        """
+        if not cancel_reason or not cancel_desc :
+            print "In order to cancel a policy, you should enter it's cancelation status and it's description"
+            return
+
+        """
+        Check if cancel reason is valid
+        """
+        if  not cancelation_reason.__contains__(cancel_reason):
+            print "please choose one of these cancelation reasons:"
+            for val in cancelation_reason:
+                print val
+            return False
+
+        if not cancel_date:
+            cancel_date = datetime.now().date()
+
+        self.policy.status = 'Canceled'
+        self.policy.cancelation_date = cancel_date
+        self.policy.cancellation_description = cancel_desc
+        self.policy.cancelation_reason = cancel_reason
+
+        """
+        marking the policy's invoices as deleted
+        """
+        for invoice in self.policy.invoices:
+            invoice.deleted = True
+
+        db.session.commit()
 
 
     def make_invoices(self):

@@ -72,6 +72,71 @@ class TestBillingSchedules(unittest.TestCase):
         self.assertEquals(len(self.policy.invoices), 2)
         self.assertEquals(self.policy.invoices[0].amount_due, 600)
 
+class TestCancelPolicy(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.test_agent = Contact('Test Agent', 'Agent')
+        cls.test_insured = Contact('Test Insured', 'Named Insured')
+        db.session.add(cls.test_agent)
+        db.session.add(cls.test_insured)
+        db.session.commit()
+
+        cls.policy = Policy('Test Policy', date(2015, 1, 1), 1200)
+        db.session.add(cls.policy)
+        cls.policy.billing_schedule = "Annual"
+        cls.policy.named_insured = cls.test_insured.id
+        cls.policy.agent = cls.test_agent.id
+        db.session.commit()
+
+    @classmethod
+    def tearDownClass(cls):
+        db.session.delete(cls.test_insured)
+        db.session.delete(cls.test_agent)
+        db.session.delete(cls.policy)
+        db.session.commit()
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        for invoice in self.policy.invoices:
+            db.session.delete(invoice)
+
+        self.policy.status = 'Active'
+        self.policy.status_code = None
+        self.policy.status_desc = None
+        self.policy.cancel_date = None
+
+        db.session.commit()
+
+    def test_cancel_policy(self):
+        pa = PolicyAccounting(self.policy.id)
+        pa.cancel_policy('unauthorized', 'This is the description for the cancelation', date(2019, 3, 3))
+        self.assertEquals(self.policy.invoices[0].deleted, True)
+        self.assertEquals(self.policy.status, 'Canceled')
+        self.assertEquals(self.policy.cancelation_reason, 'unauthorized')
+        self.assertEquals(self.policy.cancellation_description, 'This is the description for the cancelation')
+        self.assertEquals(self.policy.cancelation_date, date(2019, 3, 3))
+
+    def test_cancel_policy_with_wrong_status(self):
+        pa = PolicyAccounting(self.policy.id)
+        pa.cancel_policy('wrong cancelation status', 'This is the description for the cancelation', date(2019, 3, 3))
+        self.assertEqual(self.policy.invoices[0].deleted, False)
+        self.assertEqual(self.policy.status, 'Active')
+        self.assertNotEqual(self.policy.cancelation_reason, 'wrong cancelation status')
+        self.assertEqual(self.policy.cancellation_description, 'This is the description for the cancelation')
+        self.assertEqual(self.policy.cancelation_date, date(2019, 3, 3))
+
+    def test_cancel_policy_with_wrong_description(self):
+        pa = PolicyAccounting(self.policy.id)
+        pa.cancel_policy('unpaid', None, date(2019, 3, 3))
+        self.assertEqual(self.policy.invoices[0].deleted, False)
+        self.assertEqual(self.policy.status, 'Active')
+        self.assertNotEqual(self.policy.cancelation_reason, 'unpaid')
+        self.assertNotEqual(self.policy.cancellation_description, None)
+        self.assertEqual(self.policy.cancelation_date, date(2019, 3, 3))
+
+
 class TestUpdateBillingSchedule(unittest.TestCase):
 
     @classmethod
@@ -116,7 +181,7 @@ class TestUpdateBillingSchedule(unittest.TestCase):
         self.assertEqual(self.policy.invoices[2].deleted, True)
         self.assertEqual(self.policy.invoices[3].deleted, True)
 
-        
+
     def test_update_billing_schedule_annual_to_monthly(self):
         self.policy.billing_schedule = "Annual"
         self.assertFalse(self.policy.invoices)
