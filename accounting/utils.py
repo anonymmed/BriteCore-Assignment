@@ -74,6 +74,13 @@ class PolicyAccounting(object):
                 contact_id = self.policy.named_insured
             except:
                 logging.exception("contact_id cannot be NULL")
+                return
+
+        if self.evaluate_cancellation_pending_due_to_non_pay(date_cursor):
+            contact = Contact.query.filter_by(id=contact_id).one()
+            if 'Agent' != contact.role:
+                print 'At This Stage, Only an agent can make the payment.'
+                return
 
         """
         Creating a new payment with the previous Information and persisting it
@@ -94,7 +101,20 @@ class PolicyAccounting(object):
          being paid in full. However, it has not necessarily
          made it to the cancel_date yet.
         """
-        pass
+        invoices = Invoice.query.filter_by(policy_id=self.policy.id)\
+                                .order_by(Invoice.bill_date)\
+                                .all()
+
+        # get invoices payments
+        for invoice in invoices:
+            payments = Payment.query.filter_by(policy_id=invoice.policy_id)\
+                                    .filter(Payment.transaction_date <= invoice.due_date and Payment.transaction_date >= invoice.bill_date)\
+                                    .all()
+            if not payments:
+                if date_cursor < invoice.cancel_date and date_cursor > invoice.due_date:
+                    return True
+
+        return False
 
     def evaluate_cancel(self, date_cursor=None):
 
