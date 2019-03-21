@@ -29,6 +29,11 @@ def getPolicyByIdAndDate(id, date):
         return Response("Please enter a valid date format mm/dd/yyyy", status=404)
 
     try:
+        id = int(id)
+    except ValueError:
+        return Response("Policy Id must be an int")
+
+    try:
         # Get policy
         policy = Policy.query.filter_by(id=id).one()
     except sqlalchemy.orm.exc.NoResultFound as error:
