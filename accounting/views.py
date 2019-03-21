@@ -33,7 +33,7 @@ def getPolicyByIdAndDate(id, date):
         policy = Policy.query.filter_by(id=id).one()
     except sqlalchemy.orm.exc.NoResultFound as error:
         # Print not found
-        return Response("Policy " + str(id) + "was not found", status=404)
+        return Response(None)
 
     try:
         # Get insured name
